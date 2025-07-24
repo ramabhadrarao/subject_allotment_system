@@ -16,6 +16,15 @@ if (!validate_session($conn, 'admin', $_SESSION['admin_username'])) {
 $error_message = '';
 $success_message = '';
 
+// Fixed pool names
+$FIXED_POOL_NAMES = [
+    'Subjects Pool 1',
+    'Subjects Pool 2', 
+    'Subjects Pool 3',
+    'Subjects Pool 4',
+    'Subjects Pool 5'
+];
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
@@ -36,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             if (empty($pool_name) || empty($subject_code) || empty($subject_name) || $intake <= 0 || empty($allowed_programmes) || empty($batch) || empty($semester)) {
                 $error_message = 'Please fill all required fields.';
+            } else if (!in_array($pool_name, $FIXED_POOL_NAMES)) {
+                $error_message = 'Please select a valid pool name from the dropdown.';
             } else {
                 try {
                     // Check if subject code already exists
@@ -81,6 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             if ($pool_id <= 0 || empty($pool_name) || empty($subject_code) || empty($subject_name) || $intake <= 0 || empty($allowed_programmes) || empty($batch) || empty($semester)) {
                 $error_message = 'Please fill all required fields.';
+            } else if (!in_array($pool_name, $FIXED_POOL_NAMES)) {
+                $error_message = 'Please select a valid pool name from the dropdown.';
             } else {
                 try {
                     // Get old values for logging
@@ -239,6 +252,13 @@ $csrf_token = generate_csrf_token();
         .action-buttons .btn {
             margin: 2px;
         }
+        .pool-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
         @media (max-width: 768px) {
             .action-buttons {
                 display: flex;
@@ -270,7 +290,7 @@ $csrf_token = generate_csrf_token();
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2><i class="fas fa-layer-group me-2"></i>Manage Subject Pools</h2>
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addPoolModal">
-                <i class="fas fa-plus me-2"></i>Add New Pool
+                <i class="fas fa-plus me-2"></i>Add New Subject
             </button>
         </div>
 
@@ -290,6 +310,25 @@ $csrf_token = generate_csrf_token();
             </div>
         <?php endif; ?>
 
+        <!-- Pool Information -->
+        <div class="pool-info">
+            <div class="row">
+                <div class="col-md-8">
+                    <h5><i class="fas fa-info-circle me-2"></i>Subject Pool System</h5>
+                    <p class="mb-0">
+                        Manage subjects across 5 fixed pools. Each pool can contain multiple subjects with different intake capacities.
+                        Students will register for pools and select their preferred subjects within each pool.
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <h6>Available Pools:</h6>
+                    <?php foreach ($FIXED_POOL_NAMES as $pool): ?>
+                        <span class="badge bg-light text-dark me-1"><?php echo $pool; ?></span>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+
         <!-- Subject Pools List -->
         <div class="card list-card">
             <div class="card-header bg-primary text-white">
@@ -304,7 +343,7 @@ $csrf_token = generate_csrf_token();
                         <h5>No Subject Pools Found</h5>
                         <p>Create your first subject pool to get started.</p>
                         <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addPoolModal">
-                            <i class="fas fa-plus me-2"></i>Add New Pool
+                            <i class="fas fa-plus me-2"></i>Add New Subject
                         </button>
                     </div>
                 <?php else: ?>
@@ -327,7 +366,9 @@ $csrf_token = generate_csrf_token();
                             <tbody>
                                 <?php foreach ($subject_pools as $pool): ?>
                                 <tr>
-                                    <td><strong><?php echo htmlspecialchars($pool['pool_name']); ?></strong></td>
+                                    <td>
+                                        <strong class="text-primary"><?php echo htmlspecialchars($pool['pool_name']); ?></strong>
+                                    </td>
                                     <td><?php echo htmlspecialchars($pool['subject_name']); ?></td>
                                     <td>
                                         <span class="badge bg-info"><?php echo htmlspecialchars($pool['subject_code']); ?></span>
@@ -339,11 +380,16 @@ $csrf_token = generate_csrf_token();
                                         <?php 
                                         $programmes = json_decode($pool['allowed_programmes'], true);
                                         if ($programmes):
-                                            foreach ($programmes as $prog):
+                                            foreach (array_slice($programmes, 0, 3) as $prog):
                                         ?>
                                             <span class="badge bg-secondary programme-badge"><?php echo htmlspecialchars($prog); ?></span>
                                         <?php 
                                             endforeach;
+                                            if (count($programmes) > 3):
+                                        ?>
+                                            <span class="badge bg-secondary programme-badge">+<?php echo count($programmes) - 3; ?> more</span>
+                                        <?php 
+                                            endif;
                                         endif; 
                                         ?>
                                     </td>
@@ -381,7 +427,7 @@ $csrf_token = generate_csrf_token();
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fas fa-plus me-2"></i>Add New Subject Pool
+                        <i class="fas fa-plus me-2"></i>Add New Subject to Pool
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
@@ -394,28 +440,35 @@ $csrf_token = generate_csrf_token();
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="add_pool_name" class="form-label">Pool Name</label>
-                                    <input type="text" class="form-control" id="add_pool_name" name="pool_name" required>
+                                    <label for="add_pool_name" class="form-label">
+                                        <i class="fas fa-layer-group me-1"></i>Pool Name
+                                    </label>
+                                    <select class="form-select" id="add_pool_name" name="pool_name" required>
+                                        <option value="">Select Pool</option>
+                                        <?php foreach ($FIXED_POOL_NAMES as $pool_name): ?>
+                                            <option value="<?php echo $pool_name; ?>"><?php echo $pool_name; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="add_subject_code" class="form-label">Subject Code</label>
-                                    <input type="text" class="form-control" id="add_subject_code" name="subject_code" required style="text-transform: uppercase;">
+                                    <input type="text" class="form-control" id="add_subject_code" name="subject_code" required style="text-transform: uppercase;" placeholder="e.g., CS501">
                                 </div>
                             </div>
                         </div>
                         
                         <div class="mb-3">
                             <label for="add_subject_name" class="form-label">Subject Name</label>
-                            <input type="text" class="form-control" id="add_subject_name" name="subject_name" required>
+                            <input type="text" class="form-control" id="add_subject_name" name="subject_name" required placeholder="e.g., Advanced Algorithms">
                         </div>
                         
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <label for="add_intake" class="form-label">Intake</label>
-                                    <input type="number" class="form-control" id="add_intake" name="intake" min="1" required>
+                                    <input type="number" class="form-control" id="add_intake" name="intake" min="1" required placeholder="30">
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -440,6 +493,14 @@ $csrf_token = generate_csrf_token();
                         <div class="mb-3">
                             <label class="form-label">Allowed Programmes</label>
                             <div class="row">
+                                <div class="col-12">
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllProgrammes('add')">Select All</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllProgrammes('add')">Clear All</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
                                 <?php foreach ($available_programmes as $prog): ?>
                                 <div class="col-md-4 col-sm-6">
                                     <div class="form-check">
@@ -457,7 +518,7 @@ $csrf_token = generate_csrf_token();
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-success">
-                            <i class="fas fa-save me-2"></i>Create Pool
+                            <i class="fas fa-save me-2"></i>Add Subject to Pool
                         </button>
                     </div>
                 </form>
@@ -485,8 +546,15 @@ $csrf_token = generate_csrf_token();
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="edit_pool_name" class="form-label">Pool Name</label>
-                                    <input type="text" class="form-control" id="edit_pool_name" name="pool_name" required>
+                                    <label for="edit_pool_name" class="form-label">
+                                        <i class="fas fa-layer-group me-1"></i>Pool Name
+                                    </label>
+                                    <select class="form-select" id="edit_pool_name" name="pool_name" required>
+                                        <option value="">Select Pool</option>
+                                        <?php foreach ($FIXED_POOL_NAMES as $pool_name): ?>
+                                            <option value="<?php echo $pool_name; ?>"><?php echo $pool_name; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -530,7 +598,15 @@ $csrf_token = generate_csrf_token();
                         
                         <div class="mb-3">
                             <label class="form-label">Allowed Programmes</label>
-                            <div class="row" id="edit_programmes_container">
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllProgrammes('edit')">Select All</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllProgrammes('edit')">Clear All</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-2" id="edit_programmes_container">
                                 <?php foreach ($available_programmes as $prog): ?>
                                 <div class="col-md-4 col-sm-6">
                                     <div class="form-check">
@@ -548,7 +624,7 @@ $csrf_token = generate_csrf_token();
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-2"></i>Update Pool
+                            <i class="fas fa-save me-2"></i>Update Subject
                         </button>
                     </div>
                 </form>
@@ -570,7 +646,7 @@ $csrf_token = generate_csrf_token();
                     <div class="alert alert-danger">
                         <strong>Warning!</strong> This action cannot be undone.
                     </div>
-                    <p>Are you sure you want to delete the subject pool "<span id="deletePoolName"></span>"?</p>
+                    <p>Are you sure you want to delete the subject "<span id="deletePoolName"></span>"?</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -644,6 +720,18 @@ $csrf_token = generate_csrf_token();
             
             const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
             modal.show();
+        }
+
+        function selectAllProgrammes(type) {
+            const container = type === 'add' ? document : document.getElementById('edit_programmes_container');
+            const checkboxes = container.querySelectorAll(`input[name="allowed_programmes[]"]`);
+            checkboxes.forEach(cb => cb.checked = true);
+        }
+
+        function clearAllProgrammes(type) {
+            const container = type === 'add' ? document : document.getElementById('edit_programmes_container');
+            const checkboxes = container.querySelectorAll(`input[name="allowed_programmes[]"]`);
+            checkboxes.forEach(cb => cb.checked = false);
         }
 
         // Form submission handlers

@@ -43,18 +43,24 @@ try {
 
     // Pool-wise statistics
     $stmt = $conn->prepare("
-        SELECT 
-            sp.pool_name,
-            sp.subject_name,
-            sp.intake,
-            COUNT(sr.id) as registrations,
-            COUNT(sa.id) as allotments
-        FROM subject_pools sp
-        LEFT JOIN student_registrations sr ON sp.id = sr.pool_id
-        LEFT JOIN subject_allotments sa ON sp.id = sa.pool_id
-        WHERE sp.is_active = 1
-        GROUP BY sp.id
-        ORDER BY sp.pool_name, sp.subject_name
+       SELECT 
+    sp.subject_name,
+    sp.subject_code,
+    sp.intake,
+    (SELECT COUNT(DISTINCT sr.regno)
+     FROM student_registrations sr
+     JOIN subject_pools sp2 ON sr.pool_id = sp2.id
+     WHERE sp2.pool_name = sp.pool_name
+       AND sp2.allowed_programmes = sp.allowed_programmes
+       AND JSON_SEARCH(sr.priority_order, 'one', sp.subject_code, NULL, '$[*].subject_code') IS NOT NULL
+    ) as registrations,
+    COUNT(DISTINCT sa.regno) as allotments
+FROM subject_pools sp
+LEFT JOIN subject_allotments sa ON sp.subject_code = sa.subject_code
+WHERE sp.is_active = 1
+GROUP BY sp.subject_code, sp.subject_name, sp.intake
+ORDER BY sp.subject_code;
+
     ");
     $stmt->execute();
     $pool_stats = $stmt->fetchAll();
@@ -279,7 +285,7 @@ log_activity($conn, 'admin', $_SESSION['admin_username'], 'dashboard_view');
                                         <table class="table table-hover" id="poolStatsTable">
                                             <thead class="table-light">
                                                 <tr>
-                                                    <th>Pool Name</th>
+                                                   
                                                     <th>Subject</th>
                                                     <th>Intake</th>
                                                     <th>Registrations</th>
@@ -290,7 +296,6 @@ log_activity($conn, 'admin', $_SESSION['admin_username'], 'dashboard_view');
                                             <tbody>
                                                 <?php foreach ($pool_stats as $stat): ?>
                                                 <tr>
-                                                    <td><?php echo htmlspecialchars($stat['pool_name']); ?></td>
                                                     <td><?php echo htmlspecialchars($stat['subject_name']); ?></td>
                                                     <td>
                                                         <span class="badge bg-info"><?php echo $stat['intake']; ?></span>

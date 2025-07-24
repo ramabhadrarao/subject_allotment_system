@@ -30,10 +30,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $error_message = 'Registration number not found. Please register first.';
                         log_security_event($conn, 'student_login_failed', 'medium', 'Student login failed - regno not found', $regno);
                     } else {
-                        // Verify password (using email as password)
+                        // Verify password (using email as password - case insensitive)
                         $student_email = trim(strtolower($student['email']));
+                        $entered_password = trim(strtolower($password));
                         
-                        if (strtolower($password) !== $student_email) {
+                        if ($entered_password !== $student_email) {
                             $error_message = 'Invalid password. Use your registered email address as password.';
                             log_security_event($conn, 'student_login_failed', 'medium', 'Student login failed - invalid password', $regno);
                         } else {
@@ -42,9 +43,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             $_SESSION['student_logged_in'] = true;
                             $_SESSION['student_regno'] = $regno;
                             $_SESSION['student_email'] = $student['email'];
+                            $_SESSION['student_mobile'] = $student['mobile'];
                             $_SESSION['student_pool_id'] = $student['pool_id'];
-                            $_SESSION['student_name'] = $student['name'] ?? $regno; // Store name if available
                             $_SESSION['student_login_time'] = time();
+                            
+                            // Create session record
+                            create_session($conn, 'student', $regno);
                             
                             log_login($conn, 'student', $regno, 'login');
                             log_activity($conn, 'student', $regno, 'login_success', 'student_registrations', $student['id']);
@@ -148,11 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         ]);
                                         
                                         $success_message = "Registration successful!<br>" .
-                                            "<strong>Welcome {$student_data['name']}!</strong><br>" .
+                                            "<strong>Welcome {$student_data['student_name']}!</strong><br>" .
                                             "Programme: {$student_data['programme']}<br>" .
                                             "Subject: {$selected_subject['subject_name']} ({$selected_subject['subject_code']})<br>" .
                                             "Pool: {$selected_subject['pool_name']}<br>" .
-                                            "You can now login using your registration number and mobile number.";
+                                            "You can now login using your registration number as username and email address as password.";
                                     }
                                 }
                             }
@@ -283,6 +287,13 @@ log_activity($conn, 'system', 'anonymous', 'student_portal_accessed');
             border-color: #28a745 !important;
             box-shadow: 0 0 10px rgba(40, 167, 69, 0.3);
         }
+        .login-info {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
         @keyframes slideDown {
             from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -326,6 +337,15 @@ log_activity($conn, 'system', 'anonymous', 'student_portal_accessed');
                     </div>
                 <?php endif; ?>
 
+                <!-- Login Instructions -->
+                <div class="login-info">
+                    <h6><i class="fas fa-info-circle me-2"></i>Login Instructions</h6>
+                    <p class="mb-0">
+                        <strong>Username:</strong> Your Registration Number (e.g., 23A21A6549)<br>
+                        <strong>Password:</strong> Your Registered Email Address
+                    </p>
+                </div>
+
                 <!-- Navigation Tabs -->
                 <ul class="nav nav-pills nav-justified mb-4" id="portalTabs" role="tablist">
                     <li class="nav-item" role="presentation">
@@ -362,28 +382,29 @@ log_activity($conn, 'system', 'anonymous', 'student_portal_accessed');
 
                             <div class="mb-4">
                                 <label for="regno" class="form-label">
-                                    <i class="fas fa-id-card me-1"></i>Registration Number
+                                    <i class="fas fa-id-card me-1"></i>Registration Number (Username)
                                 </label>
                                 <div class="input-group">
                                     <span class="input-group-text">
                                         <i class="fas fa-user"></i>
                                     </span>
                                     <input type="text" class="form-control" id="regno" name="regno" 
-                                           placeholder="Enter your registration number" required
-                                           style="text-transform: uppercase;">
+                                           placeholder="Enter your registration number (e.g., 23A21A6549)" required
+                                           style="text-transform: uppercase;"
+                                           value="<?php echo htmlspecialchars($_POST['regno'] ?? ''); ?>">
                                 </div>
                             </div>
 
                             <div class="mb-4">
                                 <label for="password" class="form-label">
-                                    <i class="fas fa-lock me-1"></i>Password
+                                    <i class="fas fa-lock me-1"></i>Email Address (Password)
                                 </label>
                                 <div class="input-group">
                                     <span class="input-group-text">
-                                        <i class="fas fa-key"></i>
+                                        <i class="fas fa-envelope"></i>
                                     </span>
-                                    <input type="password" class="form-control" id="password" name="password" 
-                                           placeholder="Enter your email address" required>
+                                    <input type="email" class="form-control" id="password" name="password" 
+                                           placeholder="Enter your registered email address" required>
                                     <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password')">
                                         <i class="fas fa-eye"></i>
                                     </button>
@@ -393,8 +414,14 @@ log_activity($conn, 'system', 'anonymous', 'student_portal_accessed');
 
                             <div class="d-grid">
                                 <button type="submit" class="btn btn-primary btn-lg">
-                                    <i class="fas fa-sign-in-alt me-2"></i>Login
+                                    <i class="fas fa-sign-in-alt me-2"></i>Login to Dashboard
                                 </button>
+                            </div>
+                            
+                            <div class="text-center mt-3">
+                                <small class="text-muted">
+                                    Don't have an account? Switch to the <strong>Register</strong> tab above
+                                </small>
                             </div>
                         </form>
                     </div>
@@ -444,6 +471,7 @@ log_activity($conn, 'system', 'anonymous', 'student_portal_accessed');
                                 </label>
                                 <input type="email" class="form-control" id="reg_email" name="email" 
                                        placeholder="Enter your email address" required>
+                                <small class="text-muted">This email will be used as your login password</small>
                             </div>
 
                             <div class="mb-4" id="subjectSelection" style="display: none;">

@@ -38,9 +38,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                 $stmt = $conn->prepare("DELETE FROM subject_allotments WHERE pool_id = ?");
                 $stmt->execute([$pool_id]);
                 
-                // Get all subjects in the pool
-                $stmt = $conn->prepare("SELECT * FROM subject_pools WHERE (id = ? OR pool_id = ?) AND is_active = 1 ORDER BY subject_code");
-                $stmt->execute([$pool_id, $pool_id]);
+                // Get pool information first
+                $stmt = $conn->prepare("SELECT pool_name, semester, batch FROM subject_pools WHERE id = ?");
+                $stmt->execute([$pool_id]);
+                $pool_info = $stmt->fetch();
+                
+                if (!$pool_info) {
+                    throw new Exception("Invalid pool ID");
+                }
+                
+                // Get all subjects in the same pool (same pool_name, semester, and batch)
+                $stmt = $conn->prepare("SELECT * FROM subject_pools WHERE pool_name = ? AND semester = ? AND batch = ? AND is_active = 1 ORDER BY subject_code");
+                $stmt->execute([$pool_info['pool_name'], $pool_info['semester'], $pool_info['batch']]);
                 $subjects = $stmt->fetchAll();
                 
                 // Initialize subject intake tracking
